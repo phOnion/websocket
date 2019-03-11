@@ -23,11 +23,10 @@ class Client
     private $flags;
     private $options;
 
-    public function __construct(string $uri, int $timeout = 1, int $flags = STREAM_CLIENT_CONNECT)
+    public function __construct(string $uri, int $timeout = 1)
     {
         $this->uri = uri_for($uri);
         $this->timeout = $timeout;
-        $this->flags = $flags;
     }
 
     public function set(array $options)
@@ -47,7 +46,7 @@ class Client
 
         $stream = new RawStream($resource);
         $stream->write($message);
-        $response = parse_response($stream->read(1024 * 1024 * 2));
+        $response = parse_response($stream->read());
 
         if ($response->getHeaderLine('Upgrade') !== 'websocket') {
             throw new \RuntimeException(
