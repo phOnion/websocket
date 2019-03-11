@@ -123,7 +123,7 @@ class Frame
             $mask = fread($fp, 4);
             $data = $length ? (\str_pad($mask, $length, $mask, \STR_PAD_RIGHT) ^ fread($fp, $length)) : '';
         } else {
-            $data = $length ? $packet : '';
+            $data = $length ? fread($fp, $length) : '';
         }
 
         return new Frame(
