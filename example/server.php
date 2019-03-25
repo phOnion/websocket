@@ -7,12 +7,9 @@ use Onion\Framework\WebSocket\Handlers\Handshake;
 use Onion\Framework\WebSocket\Server;
 use Onion\Framework\WebSocket\Stream;
 
-$server = new Server('0.0.0.0', 1337, Server::TYPE_TCP);
-$server->on('handshake', function ($request, $socket) {
-	$handshake = new Handshake();
-
-	return $handshake($request, $socket);
-});
+$server = new Server();
+$server->addListener('0.0.0.0', 1337, Server::TYPE_TCP);
+$server->on('handshake', new Handshake());
 $server->on('message', function (Stream $socket, Frame $data) {
 	echo "Message\n";
 
