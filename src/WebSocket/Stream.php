@@ -1,7 +1,7 @@
 <?php
 namespace Onion\Framework\WebSocket;
 
-use Onion\Framework\EventLoop\Stream\Interfaces\StreamInterface;
+use GuzzleHttp\Stream\StreamInterface;
 use Onion\Framework\WebSocket\Exceptions\CloseException;
 use Onion\Framework\WebSocket\Exceptions\UnknownOpcodeException;
 
@@ -113,6 +113,6 @@ class Stream
 
     public function isClosed()
     {
-        return $this->stream === null || $this->stream->isClosed();
+        return $this->stream === null || $this->stream->eof();
     }
 }

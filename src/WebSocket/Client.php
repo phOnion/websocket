@@ -1,17 +1,14 @@
 <?php
 namespace Onion\Framework\WebSocket;
 
-use Closure;
-use function GuzzleHttp\Psr7\parse_request;
 use function GuzzleHttp\Psr7\parse_response;
 use function GuzzleHttp\Psr7\str;
 use function GuzzleHttp\Psr7\uri_for;
 use function Onion\Framework\EventLoop\attach;
-use function Onion\Framework\EventLoop\detach;
 use function Onion\Framework\Promise\async;
 use GuzzleHttp\Psr7\Request;
-use Onion\Framework\EventLoop\Stream\Interfaces\StreamInterface;
-use Onion\Framework\EventLoop\Stream\Stream as RawStream;
+use GuzzleHttp\Stream\Stream as RawStream;
+use GuzzleHttp\Stream\StreamInterface;
 use Onion\Framework\Promise\Interfaces\PromiseInterface;
 use Onion\Framework\Promise\Promise;
 use Onion\Framework\WebSocket\Stream;
@@ -46,7 +43,7 @@ class Client
 
         $stream = new RawStream($resource);
         $stream->write($message);
-        $response = parse_response($stream->read());
+        $response = parse_response($stream->getContents());
 
         if ($response->getHeaderLine('Upgrade') !== 'websocket') {
             throw new \RuntimeException(

@@ -1,7 +1,7 @@
 <?php
 namespace Onion\Framework\WebSocket\Handlers;
 
-use Onion\Framework\EventLoop\Stream\Interfaces\StreamInterface;
+use GuzzleHttp\Stream\StreamInterface;
 use Onion\Framework\WebSocket\Stream as WebSocket;
 use Psr\Http\Message\ServerRequestInterface;
 
