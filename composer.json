@@ -6,9 +6,9 @@
         }
     },
     "require": {
-        "onion/promise": "dev-master",
+        "onion/server": "dev-master",
         "onion/event-loop": "dev-master",
-        "onion/server": "dev-master"
+        "onion/promise": "dev-master"
     },
     "require-dev": {
         "roave/security-advisories": "dev-master"
