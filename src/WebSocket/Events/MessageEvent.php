@@ -1,7 +1,7 @@
 <?php
 namespace Onion\Framework\WebSocket\Events;
 
-use Onion\Framework\WebSocket\Stream as Resource;
+use Onion\Framework\WebSocket\Resource;
 
 class MessageEvent
 {

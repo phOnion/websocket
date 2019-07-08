@@ -5,7 +5,7 @@ use Onion\Framework\Loop\Interfaces\ResourceInterface;
 use Onion\Framework\WebSocket\Exceptions\CloseException;
 use Onion\Framework\WebSocket\Exceptions\UnknownOpcodeException;
 
-class Stream
+class Resource
 {
     public const CODE_NORMAL_CLOSE = 1000;
     public const CODE_GOAWAY = 1001;

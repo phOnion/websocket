@@ -8,7 +8,7 @@ use Onion\Framework\WebSocket\Events\ConnectEvent;
 use Onion\Framework\WebSocket\Events\HandshakeEvent;
 use Onion\Framework\WebSocket\Events\MessageEvent;
 use Onion\Framework\WebSocket\Exceptions\CloseException;
-use Onion\Framework\WebSocket\Stream as Resource;
+use Onion\Framework\WebSocket\Resource;
 use Psr\EventDispatcher\EventDispatcherInterface;
 
 class HandshakeListener
