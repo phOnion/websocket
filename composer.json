@@ -8,7 +8,8 @@
     "require": {
         "onion/server": "dev-master",
         "onion/event-loop": "dev-master",
-        "onion/promise": "dev-master"
+        "onion/promise": "dev-master",
+        "onion/http": "dev-master"
     },
     "require-dev": {
         "roave/security-advisories": "dev-master"

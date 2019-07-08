@@ -1,7 +1,8 @@
 <?php
 namespace Onion\Framework\WebSocket\Drivers;
 
-use function Onion\Framework\Server\build_request;
+use function Onion\Framework\Http\build_request;
+use Onion\Framework\Http\Events\RequestEvent;
 use Onion\Framework\Server\Drivers\DriverTrait;
 use Onion\Framework\Server\Interfaces\ContextInterface;
 use Onion\Framework\Server\Interfaces\DriverInterface;
