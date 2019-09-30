@@ -3,6 +3,9 @@ namespace Onion\Framework\WebSocket\Listeners;
 
 use function GuzzleHttp\Psr7\str;
 use GuzzleHttp\Psr7\Response;
+use Onion\Framework\Loop\Coroutine;
+use Onion\Framework\Loop\Interfaces\ResourceInterface;
+use Onion\Framework\Loop\Timer;
 use Onion\Framework\WebSocket\Events\CloseEvent;
 use Onion\Framework\WebSocket\Events\ConnectEvent;
 use Onion\Framework\WebSocket\Events\HandshakeEvent;
@@ -33,7 +36,6 @@ class HandshakeListener
         $challenge = $request->getHeaderLine('sec-websocket-key');
         if (!$this->isWebsocketKeyValid($challenge)) {
             $connection->close();
-            echo 'Nope!';
             return;
         }
 
@@ -45,17 +47,25 @@ class HandshakeListener
             'Sec-WebSocket-Accept' => $key,
             'Sec-WebSocket-Version' => '13',
         ]);
-
         if ($request->hasHeader('Sec-WebSocket-Protocol')) {
             $response = $response->withAddedHeader(
                 'Sec-WebSocket-Protocol',
-                array_intersect($this->protocols, $request->getHeader('Sec-Websocket-Protocol'))
+                current(array_intersect($this->protocols, explode(',', $request->getHeaderLine('Sec-Websocket-Protocol'))))
             );
         }
 
         $connection->write(str($response));
 
         yield $this->dispatcher->dispatch(new ConnectEvent($request, $connection));
+
+        yield Timer::interval(function (ResourceInterface $resource) {
+            if (!$resource->isAlive()) {
+                yield Coroutine::kill();
+                return;
+            }
+
+            yield (new Resource($resource))->ping();
+        }, 20000, [$connection]);
 
         while ($connection->isAlive()) {
             yield $connection->wait();
