@@ -2,7 +2,7 @@
 use Onion\Framework\Event\Dispatcher;
 use Onion\Framework\Event\ListenerProviders\AggregateProvider;
 use Onion\Framework\Event\ListenerProviders\SimpleProvider;
-use Onion\Framework\Loop\Interfaces\ResourceInterface;
+use Onion\Framework\Loop\Interfaces\AsyncResourceInterface;
 use Onion\Framework\Loop\Scheduler;
 use Onion\Framework\Server\Server;
 use Onion\Framework\WebSocket\Drivers\WebSocketDriver;
@@ -25,11 +25,12 @@ $provider->addProvider(new SimpleProvider([
         function (MessageEvent $event) {
             $frame = $event->getConnection()->read();
 
-            yield $event->getConnection()->wait(ResourceInterface::OPERATION_WRITE);
-
-            $event->getConnection()->write(
-                new Frame("Server: {$frame->getData()}", Frame::OPCODE_TEXT, true)
-            );
+            if ($frame !== null) {
+                yield $event->getConnection()->wait(AsyncResourceInterface::OPERATION_WRITE);
+                $event->getConnection()->write(
+                    new Frame("Server: {$frame->getData()}", Frame::OPCODE_TEXT, true)
+                );
+            }
         }
     ],
     CloseEvent::class => [
