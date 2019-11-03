@@ -61,7 +61,7 @@ class Frame
         $length = strlen($frame->getData());
 
         $header = chr($frame->getOpcode() |
-            ($frame->isFinal() ? Frame::OPCODE_FINISHED : Frame::OPCODE_CONTINUATION) |
+            ($frame->isFinal() ? static::OPCODE_FINISHED : static::OPCODE_CONTINUATION) |
             ($masked ? self::RESERVED : 0));
 
         $mask = $masked ? self::OPCODE_MASKED : 0;
@@ -80,57 +80,6 @@ class Frame
 
         $bytes = \random_bytes(4);
         return $header . $bytes . ($frame->getData() ^ \str_pad($bytes, $length, $bytes, \STR_PAD_RIGHT));
-    }
-
-    public static function unmask(string $packet): Frame
-    {
-        $fp = fopen('php://temp', 'w+b');
-        fwrite($fp, $packet);
-        rewind($fp);
-
-        $header = fread($fp, 2);
-        $byte = [
-            ord($header[0]),
-            ord($header[1]),
-        ];
-
-        $finished = ($byte[0] | Frame::OPCODE_FINISHED) === $byte[0];
-        $masked = ($byte[1] & self::OPCODE_MASKED) ? true : false;
-        $length = $byte[1] & self::OPCODE_LENGTH;
-
-        if ($length === 126) {
-            $length = \unpack('n', fread($fp, 2), 0)[1];
-        } elseif ($length === 127) {
-            $lp = \unpack('N2', fread($fp, 8), 0);
-            if (\PHP_INT_MAX === 0x7FFFFFFF) {
-                if ($lp[1] !== 0 || $lp[2] < 0) {
-                    throw new \OutOfBoundsException('Max payload size exceeded', Frame::MESSAGE_TOO_BIG);
-                }
-                $length = $lp[2];
-            } else {
-                $length = $lp[1] << 32 | $lp[2];
-                if ($length < 0) {
-                    throw new WebSocketException('Cannot use most significant bit in 64 bit length field', Frame::MESSAGE_TOO_BIG);
-                }
-            }
-        }
-
-        if ($length < 0) {
-            throw new WebSocketException('Payload length must not be negative', Frame::MESSAGE_TOO_BIG);
-        }
-
-        if ($masked) {
-            $mask = fread($fp, 4);
-            $data = $length ? (\str_pad($mask, $length, $mask, \STR_PAD_RIGHT) ^ fread($fp, $length)) : '';
-        } else {
-            $data = $length ? fread($fp, $length) : '';
-        }
-
-        return new Frame(
-            $data,
-            $byte[0] & self::OPCODE,
-            $finished
-        );
     }
 
     public function __debugInfo()

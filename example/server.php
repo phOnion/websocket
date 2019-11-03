@@ -23,11 +23,11 @@ $provider->addProvider(new SimpleProvider([
     ],
     MessageEvent::class => [
         function (MessageEvent $event) {
-            $frame = $event->getConnection()->read();
+            $frame = yield $event->getConnection()->read();
 
             if ($frame !== null) {
-                yield $event->getConnection()->wait(AsyncResourceInterface::OPERATION_WRITE);
-                $event->getConnection()->write(
+                // yield $event->getConnection()->wait(AsyncResourceInterface::OPERATION_WRITE);
+                yield $event->getConnection()->write(
                     new Frame("Server: {$frame->getData()}", Frame::OPCODE_TEXT, true)
                 );
             }

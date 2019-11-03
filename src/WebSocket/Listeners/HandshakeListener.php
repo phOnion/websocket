@@ -3,9 +3,6 @@ namespace Onion\Framework\WebSocket\Listeners;
 
 use function GuzzleHttp\Psr7\str;
 use GuzzleHttp\Psr7\Response;
-use Onion\Framework\Loop\Coroutine;
-use Onion\Framework\Loop\Interfaces\ResourceInterface;
-use Onion\Framework\Loop\Timer;
 use Onion\Framework\WebSocket\Events\CloseEvent;
 use Onion\Framework\WebSocket\Events\ConnectEvent;
 use Onion\Framework\WebSocket\Events\HandshakeEvent;
@@ -58,23 +55,12 @@ class HandshakeListener
 
         yield $this->dispatcher->dispatch(new ConnectEvent($request, $connection));
 
-        yield Timer::interval(function (ResourceInterface $resource) {
-            if (!$resource->isAlive()) {
-                yield Coroutine::kill();
-                return;
-            }
-
-            yield (new Resource($resource))->ping();
-        }, 20000, [$connection]);
-
         while ($connection->isAlive()) {
             yield $connection->wait();
             $ws = new Resource($connection);
-
             try {
-                yield $this->dispatcher->dispatch(new MessageEvent($ws));
+                yield $this->dispatcher->dispatch(new MessageEvent($ws, $request));
             } catch (CloseException $ex) {
-                $ws->close($ex->getCode());
                 yield $this->dispatcher->dispatch(new CloseEvent($request, $connection, $ex->getCode()));
                 break;
             }
