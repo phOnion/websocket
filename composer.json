@@ -1,17 +1,22 @@
 {
-    "name": "onion/websocket",
-    "autoload": {
-        "psr-4": {
-            "Onion\\Framework\\": "src/"
-        }
-    },
-    "require": {
-        "onion/server": "dev-master",
-        "onion/event-loop": "dev-master",
-        "onion/promise": "dev-master",
-        "onion/http": "dev-master"
-    },
-    "require-dev": {
-        "roave/security-advisories": "dev-master"
+  "name": "onion/websocket",
+  "autoload": {
+    "psr-4": {
+      "Onion\\Framework\\": "src/"
     }
+  },
+  "require": {
+    "onion/interfaces": "@dev",
+    "onion/server": "@dev",
+    "onion/event-loop": "@dev",
+    "onion/promise": "@dev"
+  },
+  "scripts": {
+    "fix": "phpcbf --standard=psr12 src/",
+    "lint": "phpcs --standard=psr12 src/"
+  },
+  "require-dev": {
+    "roave/security-advisories": "dev-master",
+    "squizlabs/php_codesniffer": "^3.6"
+  }
 }
