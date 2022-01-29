@@ -1,20 +1,17 @@
 <?php
+
 namespace Onion\Framework\WebSocket\Events;
 
-use Onion\Framework\Loop\Interfaces\ResourceInterface;
+use Onion\Framework\WebSocket\WebSocket;
 use Psr\Http\Message\ServerRequestInterface;
 
 class CloseEvent
 {
-    private $request;
-    private $connection;
-    private $code;
-
-    public function __construct(ServerRequestInterface $request, ResourceInterface $resource, int $code)
-    {
-        $this->request = $request;
-        $this->connection = $resource;
-        $this->code = $code;
+    public function __construct(
+        private readonly ServerRequestInterface $request,
+        private readonly WebSocket $websocket,
+        private readonly int $code,
+    ) {
     }
 
     public function getRequest(): ServerRequestInterface
@@ -22,9 +19,9 @@ class CloseEvent
         return $this->request;
     }
 
-    public function getConnection(): ResourceInterface
+    public function getConnection(): WebSocket
     {
-        return $this->connection;
+        return $this->websocket;
     }
 
     public function getCode(): int

@@ -1,27 +1,24 @@
 <?php
+
 namespace Onion\Framework\WebSocket\Events;
 
-use Onion\Framework\Loop\Interfaces\ResourceInterface;
-use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\{ResponseInterface, ServerRequestInterface};
 
 class HandshakeEvent
 {
-    private $request;
-    private $connection;
-
-    public function __construct(ServerRequestInterface $request, ResourceInterface $resource)
-    {
-        $this->request = $request;
-        $this->connection = $resource;
+    public function __construct(
+        public readonly ServerRequestInterface $request,
+        private ResponseInterface $response,
+    ) {
     }
 
-    public function getRequest(): ServerRequestInterface
+    public function getResponse(): ResponseInterface
     {
-        return $this->request;
+        return $this->response;
     }
 
-    public function getConnection(): ResourceInterface
+    public function setResponse(ResponseInterface $response): void
     {
-        return $this->connection;
+        $this->response = $response;
     }
 }

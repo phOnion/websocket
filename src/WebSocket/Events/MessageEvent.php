@@ -1,27 +1,33 @@
 <?php
+
 namespace Onion\Framework\WebSocket\Events;
 
-use Onion\Framework\WebSocket\Resource;
+use Psr\EventDispatcher\StoppableEventInterface;
+use Onion\Framework\WebSocket\Frame;
 use Psr\Http\Message\ServerRequestInterface;
 
-class MessageEvent
+class MessageEvent implements StoppableEventInterface
 {
-    private $connection;
-    private $request;
+    private ?Frame $frame = null;
 
-    public function __construct(Resource $resource, ServerRequestInterface $request)
-    {
-        $this->connection = $resource;
-        $this->request = $request;
+    public function __construct(
+        public readonly ServerRequestInterface $request,
+        public readonly Frame $message,
+    ) {
     }
 
-    public function getConnection(): Resource
+    public function setResponse(Frame $frame): void
     {
-        return $this->connection;
+        $this->frame = $frame;
     }
 
-    public function getRequest(): ServerRequestInterface
+    public function getResponse(): ?Frame
     {
-        return $this->request;
+        return $this->frame;
+    }
+
+    public function isPropagationStopped(): bool
+    {
+        return $this->frame === null;
     }
 }

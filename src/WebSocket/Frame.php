@@ -1,42 +1,27 @@
 <?php
+
 namespace Onion\Framework\WebSocket;
 
-class Frame
+use Onion\Framework\Loop\Interfaces\ResourceInterface;
+use Onion\Framework\WebSocket\Types\{Types, CloseReasons, Flags};
+use RuntimeException;
+use Stringable;
+
+use function Onion\Framework\Loop\tick;
+
+class Frame implements Stringable
 {
-    public const OPCODE_TEXT = 0x01;
-    public const OPCODE_BINARY = 0x02;
-    public const OPCODE_CLOSE = 0x08;
-    public const OPCODE_PING = 0x09;
-    public const OPCODE_PONG = 0x0A;
-
-    private const OPCODE_CONTINUATION = 0x00;
-    private const OPCODE_FINISHED = 0b10000000;
     private const OPCODE_MASKED = 0b10000000;
-    private const OPCODE_LENGTH = 0b01111111;
-    private const OPCODE = 0b00001111;
-    private const RESERVED = 0b01110000;
 
-    private const OPCODE_READABLE_MAP = [
-        0 => 'UNKNOWN',
-        0x01 => 'TEXT (0x01)',
-        0x02 => 'BINARY (0x02)',
-        0x08 => 'CLOSE (0x08)',
-        0x09 => 'PING (0x09)',
-        0x0A => 'PONG (0x0A)',
-    ];
-
-    private $data;
-    private $opcode = -1;
-    private $final;
-
-    public function __construct(?string $data = null, int $opcode = self::OPCODE_TEXT, bool $final = true)
-    {
-        $this->data = $data;
-        $this->opcode = $opcode;
-        $this->final = $final;
+    public function __construct(
+        private readonly ?string $data = null,
+        private readonly Types $opcode = Types::TEXT,
+        private readonly bool $final = true,
+        private readonly bool $masked = false,
+    ) {
     }
 
-    public function getOpcode(): int
+    public function getOpcode(): Types
     {
         return $this->opcode;
     }
@@ -51,20 +36,25 @@ class Frame
         return (string) $this->data;
     }
 
+    public function isMasked(): bool
+    {
+        return $this->masked;
+    }
+
     public function __toString()
     {
         return $this->getData();
     }
 
-    public static function encode(Frame $frame, bool $masked = false): string
+    public static function encode(Frame $frame): string
     {
         $length = strlen($frame->getData());
 
-        $header = chr($frame->getOpcode() |
-            ($frame->isFinal() ? static::OPCODE_FINISHED : static::OPCODE_CONTINUATION) |
-            ($masked ? self::RESERVED : 0));
+        $header = chr($frame->getOpcode()->value |
+            ($frame->isFinal() ? Flags::FINISHED : Flags::CONTINUATION)->value |
+            ($frame->isMasked() ? Flags::RESERVED->value : 0));
 
-        $mask = $masked ? self::OPCODE_MASKED : 0;
+        $mask = $frame->isMasked() ? self::OPCODE_MASKED : 0;
 
         if ($length > 65536) {
             $header .= pack('CNN', $mask | 127, $length, $length << 32);
@@ -74,7 +64,7 @@ class Frame
             $header .= chr($mask | $length);
         }
 
-        if (!$masked) {
+        if (!$frame->isMasked()) {
             return $header . $frame->getData();
         }
 
@@ -82,11 +72,81 @@ class Frame
         return $header . $bytes . ($frame->getData() ^ \str_pad($bytes, $length, $bytes, \STR_PAD_RIGHT));
     }
 
+    public static function decode(ResourceInterface $resource): ?Frame
+    {
+        $contents = '';
+        $finished = true;
+
+        do {
+            $h = $resource->read(2);
+            if (strlen($h) !== 2) {
+                return null;
+            }
+
+            $header = [$h[0], $h[1]];
+
+            $byte = [ord($header[0]), ord($header[1])];
+            $finished = ($byte[0] | Flags::FINISHED->value) === $byte[0];
+            $masked = ($byte[1] & static::OPCODE_MASKED) ? true : false;
+            $length = (int) $byte[1] & Flags::LENGTH->value;
+
+            if ($length === 126) {
+                $length = unpack('n', $resource->read(2), 0)[1];
+            } elseif ($length === 127) {
+                $lp = \unpack('N2', $resource->read(8))[0];
+
+                if (PHP_INT_MAX === 0x7FFFFFFF) {
+                    if ($lp[1] !== 0 || $lp[2] < 0) {
+                        throw new \OutOfBoundsException(
+                            'Max payload size exceeded',
+                            CloseReasons::MESSAGE_TOO_LONG->value
+                        );
+                    }
+                    $length = $lp[2];
+                } else {
+                    $length = $lp[1] << 32 | $lp[2];
+                }
+            }
+
+            if ($length < 0) {
+                throw new RuntimeException(
+                    'Payload length resulted in negative',
+                    CloseReasons::INVALID_FRAME_DATA->value
+                );
+            }
+
+            if ($masked) {
+                $mask = $resource->read(4);
+                $contents .= $length ?
+                    str_pad($mask, $length, $masked . STR_PAD_RIGHT) ^ $resource->read($length) : '';
+            } else {
+                $contents .= $length ? $resource->read($length) : '';
+            }
+
+            tick();
+        } while (!$finished);
+
+        return new Frame(
+            $contents,
+            Types::from($byte[0] & Flags::OPCODE->value),
+            $finished,
+            $masked,
+        );
+    }
+
     public function __debugInfo()
     {
         return [
-            'opcode' => self::OPCODE_READABLE_MAP[$this->getOpcode()],
-            'final' => $this->isFinal() ? 'Yes' : 'No',
+            'opcode' => match ($this->getOpcode()) {
+                Types::TEXT => 'TEXT (0x01)',
+                Types::BINARY => 'BINARY (0x02)',
+                Types::CLOSE => 'CLOSE (0x08)',
+                Types::PING => 'PING (0x09)',
+                Types::PONG => 'PONG (0x0A)',
+                default => 'UNKNOWN',
+            },
+            'content' => $this->data,
+            'final' => $this->isFinal(),
             'size' => \strlen($this->getData()),
         ];
     }

@@ -1,80 +1,119 @@
 <?php
+
 namespace Onion\Framework\WebSocket\Listeners;
 
-use function GuzzleHttp\Psr7\str;
-use GuzzleHttp\Psr7\Response;
-use Onion\Framework\WebSocket\Events\CloseEvent;
-use Onion\Framework\WebSocket\Events\ConnectEvent;
-use Onion\Framework\WebSocket\Events\HandshakeEvent;
-use Onion\Framework\WebSocket\Events\MessageEvent;
-use Onion\Framework\WebSocket\Exceptions\CloseException;
-use Onion\Framework\WebSocket\Resource;
+use GuzzleHttp\Psr7\{Message, Response};
+use Onion\Framework\Server\Events\RequestEvent;
+use Onion\Framework\Loop\Interfaces\ResourceInterface;
+use Onion\Framework\WebSocket\Events\{CloseEvent, ConnectEvent, HandshakeEvent, MessageEvent};
+use Onion\Framework\WebSocket\{WebSocket, Frame};
+use Onion\Framework\WebSocket\Types\Types;
 use Psr\EventDispatcher\EventDispatcherInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Onion\Framework\Loop\Types\Operation;
+use RuntimeException;
+
+use function Onion\Framework\Loop\coroutine;
 
 class HandshakeListener
 {
     private const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
-    private const KEY_PATTERN = '#^[+/0-9A-Za-z]{21}[AQgw]==$#';
+    private const PATTERN = '/^[+\/0-9A-Za-z]{21}[AQgw]==$/';
 
-    private $dispatcher;
-    private $protocols = [];
-
-    public function __construct(EventDispatcherInterface $dispatcher, array $websocketProtocols = [])
+    public function __construct(private readonly EventDispatcherInterface $dispatcher)
     {
-        $this->dispatcher = $dispatcher;
-        $this->protocols = $websocketProtocols;
     }
 
-    public function __invoke(HandshakeEvent $event)
+    public function __invoke(RequestEvent $event)
     {
         $request = $event->getRequest();
         $connection = $event->getConnection();
-
-        $challenge = $request->getHeaderLine('sec-websocket-key');
-        if (!$this->isWebsocketKeyValid($challenge)) {
-            $connection->close();
-            return;
-        }
-
-        $key = $this->buildChallengeResponse($challenge);
-
-        $response = new Response(101, [
-            'Upgrade' => 'websocket',
-            'Connection' => 'Upgrade',
-            'Sec-WebSocket-Accept' => $key,
-            'Sec-WebSocket-Version' => '13',
-        ]);
-        if ($request->hasHeader('Sec-WebSocket-Protocol')) {
-            $response = $response->withAddedHeader(
-                'Sec-WebSocket-Protocol',
-                current(array_intersect($this->protocols, explode(',', $request->getHeaderLine('Sec-Websocket-Protocol'))))
-            );
-        }
-
-        $connection->write(str($response));
-
-        yield $this->dispatcher->dispatch(new ConnectEvent($request, $connection));
-
-        while ($connection->isAlive()) {
-            yield $connection->wait();
-            $ws = new Resource($connection);
-            try {
-                yield $this->dispatcher->dispatch(new MessageEvent($ws, $request));
-            } catch (CloseException $ex) {
-                yield $this->dispatcher->dispatch(new CloseEvent($request, $connection, $ex->getCode()));
-                break;
+        if ($request->getHeaderLine('upgrade') === 'websocket') {
+            $challenge = $request->getHeaderLine('sec-websocket-key');
+            if (
+                preg_match(static::PATTERN, $challenge) !== 1 ||
+                strlen(base64_decode($challenge)) !== 16
+            ) {
+                $connection->close();
+                return;
             }
+
+            $request = $event->getRequest();
+            $event = $this->dispatcher->dispatch(
+                new HandshakeEvent($request, new Response(
+                    101,
+                    [
+                        'upgrade' => $request->hasHeader('upgrade') ?
+                            $request->getHeaderLine('upgrade') : 'websocket',
+                        'connection' => $request->hasHeader('connection') ?
+                            $request->getHeaderLine('connection') : 'Upgrade',
+                        'sec-websocket-accept' => $request->hasHeader('sec-websocket-accept') ?
+                            $request->getHeaderLine('sec-websocket-accept') :
+                            base64_encode(sha1($challenge . static::GUID, true)),
+                        'sec-websocket-version' => $request->hasHeader('sec-websocket-version') ?
+                            $request->getHeaderLine('sec-websocket-version') : '13',
+                    ],
+                )),
+            );
+
+            /** @var HandshakeEvent $event */
+            $connection->wait(Operation::WRITE);
+            if ($event->getResponse() === null) {
+                throw new RuntimeException(
+                    'Handshake was not'
+                );
+            }
+            $connection->write(
+                Message::toString(
+                    $event->getResponse()
+                )
+            );
+
+            coroutine(function (ResourceInterface $connection, ServerRequestInterface $request) {
+                $ws = new WebSocket($connection);
+                $this->dispatcher->dispatch(new ConnectEvent(
+                    $request,
+                    $ws,
+                ));
+
+                while ($connection->eof()) {
+                    try {
+                        $connection->wait(Operation::READ);
+                        $frame = $ws->read();
+
+                        $event = new MessageEvent($request, $frame);
+                        switch ($frame->getOpcode()) {
+                            case Types::PING:
+                                $event->setResponse(
+                                    new Frame(
+                                        $frame->getData(),
+                                        Types::PONG,
+                                    ),
+                                );
+                                break;
+                            case Types::CLOSE:
+                                $this->dispatcher->dispatch(
+                                    new CloseEvent($request, $ws, $frame->getData())
+                                );
+
+                                $ws->close();
+                                break 2;
+                        }
+
+                        /** @var MessageEvent $event */
+                        $event = $this->dispatcher->dispatch($event);
+                        $response = $event->getResponse();
+                        if ($response instanceof Frame) {
+                            $ws->write($event->getResponse());
+                        }
+                    } catch (\Throwable $ex) {
+                        $this->dispatcher->dispatch(
+                            new CloseEvent($request, $ws, $ex->getCode())
+                        );
+                        break;
+                    }
+                }
+            }, [$connection, $request]);
         }
-    }
-
-    private function isWebsocketKeyValid(string $key)
-    {
-        return preg_match(static::KEY_PATTERN, $key) !== 0 &&
-            strlen(base64_decode($key)) === 16;
-    }
-
-    private function buildChallengeResponse(string $key)
-    {
-        return base64_encode(sha1($key . static::GUID, true));
     }
 }
