@@ -3,7 +3,7 @@
 namespace Onion\Framework\WebSocket\Listeners;
 
 use GuzzleHttp\Psr7\{Message, Response};
-use Onion\Framework\Server\Events\RequestEvent;
+use Onion\Framework\Http\Events\RequestEvent;
 use Onion\Framework\Loop\Interfaces\ResourceInterface;
 use Onion\Framework\WebSocket\Events\{CloseEvent, ConnectEvent, HandshakeEvent, MessageEvent};
 use Onion\Framework\WebSocket\{WebSocket, Frame};
@@ -26,8 +26,8 @@ class HandshakeListener
 
     public function __invoke(RequestEvent $event)
     {
-        $request = $event->getRequest();
-        $connection = $event->getConnection();
+        $request = $event->request;
+        $connection = $event->connection;
         if ($request->getHeaderLine('upgrade') === 'websocket') {
             $challenge = $request->getHeaderLine('sec-websocket-key');
             if (
@@ -38,8 +38,7 @@ class HandshakeListener
                 return;
             }
 
-            $request = $event->getRequest();
-            $event = $this->dispatcher->dispatch(
+            $ev = $this->dispatcher->dispatch(
                 new HandshakeEvent($request, new Response(
                     101,
                     [
@@ -58,16 +57,13 @@ class HandshakeListener
 
             /** @var HandshakeEvent $event */
             $connection->wait(Operation::WRITE);
-            if ($event->getResponse() === null) {
+            if ($ev->getResponse() === null) {
                 throw new RuntimeException(
                     'Handshake was not'
                 );
             }
-            $connection->write(
-                Message::toString(
-                    $event->getResponse()
-                )
-            );
+
+            $event->setResponse($ev->getResponse());
 
             coroutine(function (ResourceInterface $connection, ServerRequestInterface $request) {
                 $ws = new WebSocket($connection);
@@ -76,7 +72,7 @@ class HandshakeListener
                     $ws,
                 ));
 
-                while ($connection->eof()) {
+                while (!$connection->eof()) {
                     try {
                         $connection->wait(Operation::READ);
                         $frame = $ws->read();
