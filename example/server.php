@@ -1,19 +1,23 @@
 <?php
+
 use Onion\Framework\Event\Dispatcher;
-use Onion\Framework\Event\ListenerProviders\AggregateProvider;
-use Onion\Framework\Event\ListenerProviders\SimpleProvider;
-use Onion\Framework\Loop\Interfaces\AsyncResourceInterface;
+use Onion\Framework\Event\ListenerProviders\{AggregateProvider, SimpleProvider};
+use Onion\Framework\Http\Events\RequestEvent;
 use Onion\Framework\Loop\Scheduler;
+use Onion\Framework\Server\Drivers\NetworkDriver;
+use Onion\Framework\Server\Events\MessageEvent as EventsMessageEvent;
 use Onion\Framework\Server\Server;
 use Onion\Framework\WebSocket\Drivers\WebSocketDriver;
-use Onion\Framework\WebSocket\Events\CloseEvent;
-use Onion\Framework\WebSocket\Events\ConnectEvent;
-use Onion\Framework\WebSocket\Events\HandshakeEvent;
-use Onion\Framework\WebSocket\Events\MessageEvent;
+use Onion\Framework\WebSocket\Events\{CloseEvent, ConnectEvent, MessageEvent};
 use Onion\Framework\WebSocket\Frame;
 use Onion\Framework\WebSocket\Listeners\HandshakeListener;
+use Onion\Framework\WebSocket\Types\Types;
+
+use function Onion\Framework\Loop\scheduler;
+use Onion\Framework\Http\Listeners\HttpMessageListener;
 
 require_once __DIR__ . '/../vendor/autoload.php';
+
 $provider = new AggregateProvider;
 $provider->addProvider(new SimpleProvider([
     ConnectEvent::class => [
@@ -23,34 +27,36 @@ $provider->addProvider(new SimpleProvider([
     ],
     MessageEvent::class => [
         function (MessageEvent $event) {
-            $frame = yield $event->getConnection()->read();
+            $frame = $event->message;
 
             if ($frame !== null) {
-                // yield $event->getConnection()->wait(AsyncResourceInterface::OPERATION_WRITE);
-                yield $event->getConnection()->write(
-                    new Frame("Server: {$frame->getData()}", Frame::OPCODE_TEXT, true)
+                $event->setResponse(
+                    new Frame("Server: {$frame->getData()}", Types::TEXT, true)
                 );
             }
         }
     ],
+    EventsMessageEvent::class => [
+        function ($ev) use (&$dispatcher) {
+            (new HttpMessageListener($dispatcher))($ev);
+        },
+    ],
     CloseEvent::class => [
         function (CloseEvent $event) {
-            echo "Connection #{$event->getConnection()->getDescriptorId()} closed ({$event->getCode()})\n";
+            echo "Connection closed ({$event->getCode()})\n";
         }
     ],
-    HandshakeEvent::class => [
-        function (HandshakeEvent $event) use (&$dispatcher) {
-            return call_user_func(new HandshakeListener($dispatcher, ['chat']), $event);
+    RequestEvent::class => [
+        function (RequestEvent $event) use (&$dispatcher) {
+            return call_user_func(new HandshakeListener($dispatcher), $event);
         }
     ],
 ]));
 $dispatcher = new Dispatcher($provider);
-$driver = new WebSocketDriver($dispatcher);
+$driver = new NetworkDriver($dispatcher);
 
 $server = new Server($dispatcher);
-$server->attach($driver, '0.0.0.0', 9501);
+$server->attach($driver, 'tcp://0.0.0.0', 9501);
 
-$scheduler = new Scheduler;
-$scheduler->add($server->start());
-
-$scheduler->start();
+$server->start();
+scheduler()->start();
