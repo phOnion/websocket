@@ -28,6 +28,6 @@ class MessageEvent implements StoppableEventInterface
 
     public function isPropagationStopped(): bool
     {
-        return $this->frame === null;
+        return $this->frame !== null;
     }
 }
