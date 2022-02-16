@@ -74,8 +74,10 @@ class Frame implements Stringable
 
     public static function decode(ResourceInterface $resource): ?Frame
     {
+        $byte = [Types::TEXT->value];
         $contents = '';
         $finished = true;
+        $masked = false;
 
         do {
             $h = $resource->read(2);
