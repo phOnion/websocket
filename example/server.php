@@ -3,11 +3,9 @@
 use Onion\Framework\Event\Dispatcher;
 use Onion\Framework\Event\ListenerProviders\{AggregateProvider, SimpleProvider};
 use Onion\Framework\Http\Events\RequestEvent;
-use Onion\Framework\Loop\Scheduler;
 use Onion\Framework\Server\Drivers\NetworkDriver;
 use Onion\Framework\Server\Events\MessageEvent as EventsMessageEvent;
 use Onion\Framework\Server\Server;
-use Onion\Framework\WebSocket\Drivers\WebSocketDriver;
 use Onion\Framework\WebSocket\Events\{CloseEvent, ConnectEvent, MessageEvent};
 use Onion\Framework\WebSocket\Frame;
 use Onion\Framework\WebSocket\Listeners\HandshakeListener;
