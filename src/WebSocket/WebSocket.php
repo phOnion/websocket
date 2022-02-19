@@ -22,7 +22,7 @@ class WebSocket
             $this->resource->wait(Operation::WRITE);
             $bytes += $this->resource->write(
                 Frame::encode(
-                    new Frame($chunk, $frame->getOpcode(), $size === $index),
+                    new Frame($chunk, $frame->getOpcode(), $size === $index, $frame->isMasked()),
                 ),
             );
         }
@@ -40,23 +40,24 @@ class WebSocket
         return $this->resource;
     }
 
-    public function ping(string $text = '')
+    public function ping(string $text = '', $masked = false)
     {
         return $this->write(
-            new Frame($text, Types::PING)
+            new Frame($text, Types::PING, masked: $masked)
         ) !== 0;
     }
 
-    public function pong(string $text = '')
+    public function pong(string $text = '', $masked = false)
     {
-        return $this->write(new Frame($text, Types::PONG)) !== 0;
+        return $this->write(new Frame($text, Types::PONG, masked: $masked)) !== 0;
     }
 
-    public function close(CloseReasons $code = CloseReasons::NORMAL)
+    public function close(CloseReasons $code = CloseReasons::NORMAL, $masked = false)
     {
         return $this->write(new Frame(
             pack('n', $code->value),
-            Types::CLOSE
+            Types::CLOSE,
+            masked: $masked
         )) !== 0;
     }
 }
