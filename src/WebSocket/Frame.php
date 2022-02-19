@@ -48,28 +48,27 @@ class Frame implements Stringable
 
     public static function encode(Frame $frame): string
     {
-        $length = strlen($frame->getData());
+        $data = $frame->getData();
+        $length = strlen($data);
+        $header = chr(($frame->isFinal() ? 0x80 : 0) | $frame->getOpcode()->value);
 
-        $header = chr($frame->getOpcode()->value |
-            ($frame->isFinal() ? Flags::FINISHED : Flags::CONTINUATION)->value |
-            ($frame->isMasked() ? Flags::RESERVED->value : 0));
+        // Mask 0x80 | payload length (0-125)
+        if ($length < 126) $header .= chr(0x80 | $length);
+        elseif ($length < 0xFFFF) $header .= chr(0x80 | 126) . pack("n", $length);
+        elseif (PHP_INT_SIZE > 4) // 64 bit
+            $header .= chr(0x80 | 127) . pack("Q", $length);
+        else  // 32 bit (pack Q dosen't work)
+            $header .= chr(0x80 | 127) . pack("N", 0) . pack("N", $length);
 
-        $mask = $frame->isMasked() ? self::OPCODE_MASKED : 0;
+        // Add mask
+        $mask = pack("N", random_bytes(4));
+        $header .= $mask;
 
-        if ($length > 65536) {
-            $header .= pack('CNN', $mask | 127, $length, $length << 32);
-        } elseif ($length > 125) {
-            $header .= pack('Cn', $mask | 126, $length);
-        } else {
-            $header .= chr($mask | $length);
-        }
+        // Mask application data.
+        for ($i = 0; $i < $length; $i++)
+            $data[$i] = chr(ord($data[$i]) ^ ord($mask[$i % 4]));
 
-        if (!$frame->isMasked()) {
-            return $header . $frame->getData();
-        }
-
-        $bytes = \random_bytes(4);
-        return $header . $bytes . ($frame->getData() ^ \str_pad($bytes, $length, $bytes, \STR_PAD_RIGHT));
+        return $header . $data;
     }
 
     public static function decode(ResourceInterface $resource): ?Frame
@@ -119,8 +118,10 @@ class Frame implements Stringable
 
             if ($masked) {
                 $mask = $resource->read(4);
-                $contents .= $length ?
-                    str_pad($mask, $length, $masked . STR_PAD_RIGHT) ^ $resource->read($length) : '';
+                for ($i = 0; $i < $length; $i++) {
+                    $ch = $resource->read(1);
+                    $contents[$i] = $ch ^ $mask[$i % 4];
+                }
             } else {
                 $contents .= $length ? $resource->read($length) : '';
             }
