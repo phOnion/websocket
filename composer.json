@@ -8,8 +8,9 @@
   "require": {
     "onion/interfaces": "@dev",
     "onion/server": "@dev",
+    "onion/http": "@dev",
     "onion/event-loop": "@dev",
-    "onion/promise": "@dev"
+    "onion/client": "@dev"
   },
   "scripts": {
     "fix": "phpcbf --standard=psr12 src/",
