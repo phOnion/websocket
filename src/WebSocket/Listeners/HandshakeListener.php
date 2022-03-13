@@ -11,9 +11,10 @@ use Onion\Framework\WebSocket\Types\Types;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Onion\Framework\Loop\Types\Operation;
+use Psr\Http\Message\RequestInterface;
 use RuntimeException;
 
-use function Onion\Framework\Loop\coroutine;
+use function Onion\Framework\Loop\{coroutine, tick};
 
 class HandshakeListener
 {
@@ -65,7 +66,7 @@ class HandshakeListener
 
             $event->setResponse($ev->getResponse());
 
-            coroutine(function (ResourceInterface $connection, ServerRequestInterface $request) {
+            coroutine(function (ResourceInterface $connection, RequestInterface $request) {
                 $ws = new WebSocket($connection);
                 $this->dispatcher->dispatch(new ConnectEvent(
                     $request,
@@ -74,22 +75,25 @@ class HandshakeListener
 
                 while (!$connection->eof()) {
                     try {
-                        $connection->wait(Operation::READ);
                         $frame = $ws->read();
 
-                        $event = new MessageEvent($request, $frame);
+                        $event = new MessageEvent(
+                            $request,
+                            $frame,
+                        );
                         switch ($frame->getOpcode()) {
                             case Types::PING:
                                 $event->setResponse(
                                     new Frame(
-                                        $frame->getData(),
-                                        Types::PONG,
+                                        data: $frame->getData(),
+                                        type: Types::PONG,
+                                        masked: true,
                                     ),
                                 );
                                 break;
                             case Types::CLOSE:
                                 $this->dispatcher->dispatch(
-                                    new CloseEvent($request, $ws, $frame->getData())
+                                    new CloseEvent($request, $ws, substr($frame->getData(), 0, 4))
                                 );
 
                                 $ws->close();
@@ -108,6 +112,7 @@ class HandshakeListener
                         );
                         break;
                     }
+                    tick();
                 }
             }, [$connection, $request]);
         }
