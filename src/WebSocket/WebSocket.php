@@ -22,7 +22,16 @@ class WebSocket
             $this->resource->wait(Operation::WRITE);
             $bytes += $this->resource->write(
                 Frame::encode(
-                    new Frame($chunk, $frame->getOpcode(), $size === $index, $frame->isMasked()),
+                    new Frame(
+                        data: $chunk,
+                        type: $frame->getOpcode(),
+                        final: $size === $index,
+                        masked: $frame->isMasked(),
+                        reserved1: $frame->reserved1,
+                        reserved2: $frame->reserved2,
+                        reserved3: $frame->reserved3,
+                        length: strlen($chunk),
+                    ),
                 ),
             );
         }
@@ -32,6 +41,7 @@ class WebSocket
 
     public function read(): ?Frame
     {
+        $this->resource->wait();
         return Frame::decode($this->resource);
     }
 
@@ -43,20 +53,20 @@ class WebSocket
     public function ping(string $text = '', $masked = false)
     {
         return $this->write(
-            new Frame($text, Types::PING, masked: $masked)
+            new Frame(data: $text, type: Types::PING, masked: $masked)
         ) !== 0;
     }
 
     public function pong(string $text = '', $masked = false)
     {
-        return $this->write(new Frame($text, Types::PONG, masked: $masked)) !== 0;
+        return $this->write(new Frame(data: $text, type: Types::PONG, masked: $masked)) !== 0;
     }
 
     public function close(CloseReasons $code = CloseReasons::NORMAL, $masked = false)
     {
         return $this->write(new Frame(
-            pack('n', $code->value),
-            Types::CLOSE,
+            data: $code->value,
+            type: Types::CLOSE,
             masked: $masked
         )) !== 0;
     }
