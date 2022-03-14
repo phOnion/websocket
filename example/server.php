@@ -1,5 +1,6 @@
 <?php
 
+use LibDNS\Records\Types\Type;
 use Onion\Framework\Event\Dispatcher;
 use Onion\Framework\Event\ListenerProviders\{AggregateProvider, SimpleProvider};
 use Onion\Framework\Http\Events\RequestEvent;
@@ -12,14 +13,19 @@ use Onion\Framework\WebSocket\Listeners\HandshakeListener;
 use Onion\Framework\WebSocket\Types\Types;
 
 use function Onion\Framework\Loop\scheduler;
+
 use Onion\Framework\Http\Listeners\HttpMessageListener;
+use Onion\Framework\Server\Events\StartEvent;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
 $provider = new AggregateProvider;
 $provider->addProvider(new SimpleProvider([
+    StartEvent::class => [
+        fn () => printf('Started!'),
+    ],
     ConnectEvent::class => [
-        function (ConnectEvent $event) {
+        function () {
             echo "Client Connected\n";
         }
     ],
@@ -27,26 +33,42 @@ $provider->addProvider(new SimpleProvider([
         function (MessageEvent $event) {
             $frame = $event->message;
 
-            if ($frame !== null) {
-                $event->setResponse(
-                    new Frame("Server: {$frame->getData()}", Types::TEXT, true)
-                );
+            switch ($frame->getOpcode()) {
+                case Types::PING:
+                    $event->setResponse(
+                        new Frame(
+                            type: Types::PONG,
+                            masked: false
+                        )
+                    );
+                    break;
+                default:
+                    var_dump($frame);
+                    $event->setResponse(
+                        new Frame(
+                            data: "Server: {$frame->getData()}",
+                            type: Types::TEXT,
+                            masked: false
+                        )
+                    );
+                    break;
             }
         }
     ],
     EventsMessageEvent::class => [
-        function ($ev) use (&$dispatcher) {
+        function (EventsMessageEvent $ev) use (&$dispatcher) {
             (new HttpMessageListener($dispatcher))($ev);
         },
     ],
     CloseEvent::class => [
         function (CloseEvent $event) {
+            $event->getConnection()->close();
             echo "Connection closed ({$event->getCode()})\n";
         }
     ],
     RequestEvent::class => [
         function (RequestEvent $event) use (&$dispatcher) {
-            return call_user_func(new HandshakeListener($dispatcher), $event);
+            (new HandshakeListener($dispatcher))($event);
         }
     ],
 ]));
