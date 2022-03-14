@@ -167,6 +167,10 @@ class Frame implements Stringable
             }
         }
 
+        if ($frame->getOpcode() === Types::CLOSE) {
+            $contents = (string) current(unpack('n', $contents));
+        }
+
         return $frame->withData($contents);
     }
 
