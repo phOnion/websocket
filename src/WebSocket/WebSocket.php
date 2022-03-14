@@ -65,7 +65,7 @@ class WebSocket
     public function close(CloseReasons $code = CloseReasons::NORMAL, $masked = false)
     {
         return $this->write(new Frame(
-            data: $code->value,
+            data: (string) pack('n', $code->value),
             type: Types::CLOSE,
             masked: $masked
         )) !== 0;
