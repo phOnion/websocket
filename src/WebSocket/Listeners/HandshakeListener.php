@@ -9,8 +9,8 @@ use Onion\Framework\WebSocket\Events\{CloseEvent, ConnectEvent, HandshakeEvent, 
 use Onion\Framework\WebSocket\{WebSocket, Frame};
 use Onion\Framework\WebSocket\Types\Types;
 use Psr\EventDispatcher\EventDispatcherInterface;
-use Psr\Http\Message\ServerRequestInterface;
 use Onion\Framework\Loop\Types\Operation;
+use Onion\Framework\WebSocket\Types\CloseReasons;
 use Psr\Http\Message\RequestInterface;
 use RuntimeException;
 
@@ -82,21 +82,10 @@ class HandshakeListener
                             $frame,
                         );
                         switch ($frame->getOpcode()) {
-                            case Types::PING:
-                                $event->setResponse(
-                                    new Frame(
-                                        data: $frame->getData(),
-                                        type: Types::PONG,
-                                        masked: true,
-                                    ),
-                                );
-                                break;
                             case Types::CLOSE:
                                 $this->dispatcher->dispatch(
-                                    new CloseEvent($request, $ws, substr($frame->getData(), 0, 4))
+                                    new CloseEvent($request, $ws, $frame->getData() ? current(unpack('n', $frame->getData())) : CloseReasons::NORMAL->value)
                                 );
-
-                                $ws->close();
                                 break 2;
                         }
 
