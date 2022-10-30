@@ -2,7 +2,7 @@
 
 namespace Onion\Framework\WebSocket\Listeners;
 
-use GuzzleHttp\Psr7\{Message, Response};
+use GuzzleHttp\Psr7\Response;
 use Onion\Framework\Http\Events\RequestEvent;
 use Onion\Framework\Loop\Interfaces\ResourceInterface;
 use Onion\Framework\WebSocket\Events\{CloseEvent, ConnectEvent, HandshakeEvent, MessageEvent};
@@ -84,7 +84,7 @@ class HandshakeListener
                         switch ($frame->getOpcode()) {
                             case Types::CLOSE:
                                 $this->dispatcher->dispatch(
-                                    new CloseEvent($request, $ws, $frame->getData() ? current(unpack('n', $frame->getData())) : CloseReasons::NORMAL->value)
+                                    new CloseEvent($request, $ws, (int) $frame->getData() ?: CloseReasons::NORMAL->value)
                                 );
                                 break 2;
                         }
